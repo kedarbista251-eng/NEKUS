@@ -5,6 +5,7 @@ import { IntegrationsController } from './integrations/integrations.controller.j
 import { InventoryController } from './inventory/inventory.controller.js';
 import { TopologyController } from './inventory/topology.controller.js';
 import { TelemetryController } from './telemetry/telemetry.controller.js';
+import { IncidentsController } from './incidents/incidents.controller.js';
 
 @Module({
   imports: [],
@@ -15,6 +16,7 @@ import { TelemetryController } from './telemetry/telemetry.controller.js';
     InventoryController,
     TopologyController,
     TelemetryController,
+    IncidentsController,
   ],
   providers: [],
 })

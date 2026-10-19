@@ -5,6 +5,7 @@ import {
   boolean,
   uuid,
   jsonb,
+  integer,
   primaryKey,
   index,
   uniqueIndex,
@@ -170,7 +171,7 @@ export const resourceRelationships = pgTable(
   })
 );
 
-// 10. Telemetry Sources (Collector & Agent Configurations)
+// 10. Telemetry Sources
 export const telemetrySources = pgTable(
   'telemetry_sources',
   {
@@ -179,7 +180,7 @@ export const telemetrySources = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    sourceType: text('source_type').notNull(), // 'otlp', 'cloudwatch', 'github_webhook'
+    sourceType: text('source_type').notNull(),
     ingestTokenHash: text('ingest_token_hash').notNull().unique(),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -189,7 +190,7 @@ export const telemetrySources = pgTable(
   })
 );
 
-// 11. Telemetry Events (Normalized logs, metrics, cloud events)
+// 11. Telemetry Events
 export const telemetryEvents = pgTable(
   'telemetry_events',
   {
@@ -200,7 +201,7 @@ export const telemetryEvents = pgTable(
     sourceId: uuid('source_id')
       .notNull()
       .references(() => telemetrySources.id, { onDelete: 'cascade' }),
-    eventType: text('event_type').notNull(), // 'log', 'metric', 'trace_span', 'cloud_event'
+    eventType: text('event_type').notNull(),
     resourceArn: text('resource_arn'),
     idempotencyKey: text('idempotency_key').notNull(),
     timestamp: timestamp('timestamp', { withTimezone: true }).notNull(),
@@ -213,5 +214,73 @@ export const telemetryEvents = pgTable(
       table.idempotencyKey
     ),
     orgTimeIdx: index('org_telemetry_time_idx').on(table.organizationId, table.timestamp),
+  })
+);
+
+// 12. Alert Rules
+export const alertRules = pgTable(
+  'alert_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    severity: text('severity').notNull(), // 'critical', 'warning', 'info'
+    condition: jsonb('condition').notNull(), // metric query, threshold, duration
+    isEnabled: boolean('is_enabled').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgAlertRulesIdx: index('org_alert_rules_idx').on(table.organizationId, table.isEnabled),
+  })
+);
+
+// 13. Durable Incidents
+export const incidents = pgTable(
+  'incidents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    alertRuleId: uuid('alert_rule_id').references(() => alertRules.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    severity: text('severity').notNull(), // 'critical', 'high', 'medium', 'low'
+    status: text('status').default('detected').notNull(), // 'detected', 'acknowledged', 'investigating', 'awaiting_approval', 'remediating', 'verifying', 'resolved', 'closed'
+    source: text('source').notNull(), // 'alert_rule', 'user_reported', 'cloud_event'
+    assignedToUserId: uuid('assigned_to_user_id').references(() => users.id, { onDelete: 'set null' }),
+    detectedAt: timestamp('detected_at', { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgIncidentStatusIdx: index('org_incident_status_idx').on(table.organizationId, table.status),
+    orgIncidentTimeIdx: index('org_incident_time_idx').on(table.organizationId, table.detectedAt),
+  })
+);
+
+// 14. Incident Evidence (Persisted observations, telemetry traces, and configuration snapshots)
+export const incidentEvidence = pgTable(
+  'incident_evidence',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    incidentId: uuid('incident_id')
+      .notNull()
+      .references(() => incidents.id, { onDelete: 'cascade' }),
+    evidenceType: text('evidence_type').notNull(), // 'metric_anomaly', 'error_log', 'cloudtrail_mutation', 'topology_blast_radius'
+    sourceIdentifier: text('source_identifier').notNull(),
+    confidence: integer('confidence').notNull().default(100),
+    data: jsonb('data').notNull(),
+    recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgEvidenceIncidentIdx: index('org_evidence_incident_idx').on(table.organizationId, table.incidentId),
   })
 );
