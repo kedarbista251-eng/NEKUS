@@ -18,6 +18,7 @@
     "@nexus/config": "workspace:*",
     "@nexus/contracts": "workspace:*",
     "@nexus/observability": "workspace:*",
+    "@nexus/providers-aws": "workspace:*",
     "helmet": "^8.0.0",
     "ioredis": "^5.5.0",
     "pg": "^8.13.3",
