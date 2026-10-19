@@ -5,9 +5,9 @@ import {
   boolean,
   uuid,
   jsonb,
-  integer,
   primaryKey,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 // 1. Users Entity
@@ -111,5 +111,61 @@ export const auditEvents = pgTable(
   },
   (table) => ({
     orgAuditIdx: index('org_audit_idx').on(table.organizationId, table.timestamp),
+  })
+);
+
+// 8. Cloud Resources (Discovered inventory)
+export const cloudResources = pgTable(
+  'cloud_resources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(), // 'aws', 'gcp', etc.
+    accountId: text('account_id').notNull(),
+    region: text('region').notNull(),
+    resourceId: text('resource_id').notNull(),
+    resourceType: text('resource_type').notNull(), // 'aws:ec2:instance', 'aws:ec2:vpc', etc.
+    arn: text('arn').notNull(),
+    name: text('name'),
+    status: text('status').default('active').notNull(),
+    tags: jsonb('tags').notNull().default({}),
+    properties: jsonb('properties').notNull().default({}),
+    discoveredAt: timestamp('discovered_at', { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgResourceUnique: uniqueIndex('org_resource_unique_idx').on(
+      table.organizationId,
+      table.provider,
+      table.accountId,
+      table.arn
+    ),
+    orgResTypeIdx: index('org_res_type_idx').on(table.organizationId, table.resourceType),
+  })
+);
+
+// 9. Resource Relationships (Dependency Graph Edges)
+export const resourceRelationships = pgTable(
+  'resource_relationships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    sourceResourceId: uuid('source_resource_id')
+      .notNull()
+      .references(() => cloudResources.id, { onDelete: 'cascade' }),
+    targetResourceId: uuid('target_resource_id')
+      .notNull()
+      .references(() => cloudResources.id, { onDelete: 'cascade' }),
+    relationshipType: text('relationship_type').notNull(), // 'contains', 'routes_to', 'depends_on', etc.
+    evidenceSource: text('evidence_source').notNull(), // 'observed_network', 'config_reference', 'vpc_peering'
+    observedAt: timestamp('observed_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgRelSourceIdx: index('org_rel_source_idx').on(table.organizationId, table.sourceResourceId),
+    orgRelTargetIdx: index('org_rel_target_idx').on(table.organizationId, table.targetResourceId),
   })
 );
