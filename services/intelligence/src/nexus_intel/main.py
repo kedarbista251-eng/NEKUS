@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException, Security, status
+from fastapi import FastAPI, HTTPException, Security, status, Depends
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from .config import settings
+from .schemas import InvestigationRequest, InvestigationSynthesisResponse
+from .providers import get_synthesizer_provider
 
 app = FastAPI(
     title="NEXUS Intelligence Service",
@@ -32,3 +34,12 @@ async def healthz():
         "service": settings.service_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+@app.post(
+    "/v1/investigate",
+    response_model=InvestigationSynthesisResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+async def investigate_incident(request: InvestigationRequest) -> InvestigationSynthesisResponse:
+    provider = get_synthesizer_provider()
+    return await provider.synthesize(request)
