@@ -2,7 +2,7 @@ import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { loadConfig } from '@nexus/config';
 import pg from 'pg';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 const { Pool } = pg;
 
