@@ -122,11 +122,11 @@ export const cloudResources = pgTable(
     organizationId: uuid('organization_id')
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
-    provider: text('provider').notNull(), // 'aws', 'gcp', etc.
+    provider: text('provider').notNull(),
     accountId: text('account_id').notNull(),
     region: text('region').notNull(),
     resourceId: text('resource_id').notNull(),
-    resourceType: text('resource_type').notNull(), // 'aws:ec2:instance', 'aws:ec2:vpc', etc.
+    resourceType: text('resource_type').notNull(),
     arn: text('arn').notNull(),
     name: text('name'),
     status: text('status').default('active').notNull(),
@@ -160,12 +160,58 @@ export const resourceRelationships = pgTable(
     targetResourceId: uuid('target_resource_id')
       .notNull()
       .references(() => cloudResources.id, { onDelete: 'cascade' }),
-    relationshipType: text('relationship_type').notNull(), // 'contains', 'routes_to', 'depends_on', etc.
-    evidenceSource: text('evidence_source').notNull(), // 'observed_network', 'config_reference', 'vpc_peering'
+    relationshipType: text('relationship_type').notNull(),
+    evidenceSource: text('evidence_source').notNull(),
     observedAt: timestamp('observed_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     orgRelSourceIdx: index('org_rel_source_idx').on(table.organizationId, table.sourceResourceId),
     orgRelTargetIdx: index('org_rel_target_idx').on(table.organizationId, table.targetResourceId),
+  })
+);
+
+// 10. Telemetry Sources (Collector & Agent Configurations)
+export const telemetrySources = pgTable(
+  'telemetry_sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    sourceType: text('source_type').notNull(), // 'otlp', 'cloudwatch', 'github_webhook'
+    ingestTokenHash: text('ingest_token_hash').notNull().unique(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgSourceIdx: index('org_telemetry_source_idx').on(table.organizationId, table.sourceType),
+  })
+);
+
+// 11. Telemetry Events (Normalized logs, metrics, cloud events)
+export const telemetryEvents = pgTable(
+  'telemetry_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => telemetrySources.id, { onDelete: 'cascade' }),
+    eventType: text('event_type').notNull(), // 'log', 'metric', 'trace_span', 'cloud_event'
+    resourceArn: text('resource_arn'),
+    idempotencyKey: text('idempotency_key').notNull(),
+    timestamp: timestamp('timestamp', { withTimezone: true }).notNull(),
+    ingestedAt: timestamp('ingested_at', { withTimezone: true }).defaultNow().notNull(),
+    payload: jsonb('payload').notNull(),
+  },
+  (table) => ({
+    orgDedupIdx: uniqueIndex('org_event_dedup_idx').on(
+      table.organizationId,
+      table.idempotencyKey
+    ),
+    orgTimeIdx: index('org_telemetry_time_idx').on(table.organizationId, table.timestamp),
   })
 );

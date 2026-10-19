@@ -15,6 +15,13 @@
       "when": 1792405906430,
       "tag": "0001_sticky_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792406191168,
+      "tag": "0002_orange_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }
